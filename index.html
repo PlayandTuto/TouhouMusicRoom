@@ -31,7 +31,7 @@ input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(-
 <iframe id="sc" allow="autoplay"></iframe></main>
 <script>
 // Adres Twojego Workera po wdrożeniu (wss://...). Patrz README.
-const WORKER="wss://touhou-music-room.TWOJA-SUBDOMENA.workers.dev";
+const WORKER="wss://touhou-music-room.touhoumusicroom.workers.dev";
 const $=id=>document.getElementById(id),norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,"");
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let ws,myId,hostId,titles=[],widget,tick,pt,ready=false;
