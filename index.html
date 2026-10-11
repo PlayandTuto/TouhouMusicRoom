@@ -15,6 +15,7 @@ input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(-
 .row{display:flex;gap:6px;margin-top:6px}.row input{flex:1}.m{color:var(--mut);font-size:13px}
 #chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
 #big{font-size:24px;text-align:center;margin:6px 0}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}
+label{display:block;margin-top:8px;font-size:14px}#gl label{display:flex;gap:6px;margin:3px 0;align-items:center}input[type=number]{width:80px;flex:none!important;margin-left:6px}
 .sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}
 #sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
 </style></head><body><main>
@@ -26,27 +27,38 @@ input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(-
 <h2>Gracze</h2><ul id="pl"></ul></div>
 <div class="c"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div><div class="m" id="aud"></div>
 <div class="row"><div class="sg"><input id="g" placeholder="What is the song?" autocomplete="off" disabled><div id="sug"></div></div><button id="gb" disabled>Zgaduj</button></div>
-<div class="row"><button id="start" disabled>Start / następna</button><button id="skip" disabled>Skip</button><button id="play" disabled>▶ Play</button></div></div>
-<div class="c" style="grid-column:1/-1"><h2>Czat</h2><div id="chat"></div><div class="row"><input id="ci" placeholder="Wiadomość" disabled><button id="cb" disabled>Wyślij</button></div></div>
+<div class="row"><button id="start" disabled>Start gry</button><button id="skip" disabled>Skip</button><button id="stop" disabled>Stop</button><button id="play" disabled>▶ Play</button></div></div>
+<div class="c"><h2>Ustawienia gry <span class="m">(zmienia host, w lobby)</span></h2><div class="m">Dozwolone gry:</div><div id="gl"></div>
+<label>Liczba rund <input id="rn" type="number" min="1" max="100" disabled></label>
+<label>Czas na zgadywanie (s) <input id="sec" type="number" min="10" max="180" disabled></label>
+<label>Przerwa między rundami (s) <input id="cd" type="number" min="3" max="60" disabled></label></div>
+<div class="c"><h2>Czat</h2><div id="chat"></div><div class="row"><input id="ci" placeholder="Wiadomość" disabled><button id="cb" disabled>Wyślij</button></div></div>
 <iframe id="sc" allow="autoplay"></iframe></main>
 <script>
 // Adres Twojego Workera po wdrożeniu (wss://...). Patrz README.
-const WORKER="wss://touhou-music-room.touhoumusicroom.workers.dev";
+const WORKER="wss://touhou-music-room.TWOJA-SUBDOMENA.workers.dev";
 const $=id=>document.getElementById(id),norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,"");
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let ws,myId,hostId,titles=[],widget,tick,pt,ready=false;
+let ws,myId,hostId,titles=[],cfg=null,phase="lobby",widget,tick,pt,ready=false;
 const log=(n,t)=>{const d=document.createElement("div");d.innerHTML="<b>"+esc(n)+":</b> "+esc(t);$("chat").append(d);$("chat").scrollTop=1e9};
 const send=m=>ws&&ws.readyState===1&&ws.send(JSON.stringify(m));
+const isHost=()=>hostId===myId;
+function countdown(sec,pre){const e=Date.now()+sec*1000;clearInterval(tick);const f=()=>{const s=Math.max(0,Math.ceil((e-Date.now())/1000));$("big").textContent=pre+s+" s";if(!s)clearInterval(tick)};f();tick=setInterval(f,250)}
+function updUI(){const h=isHost(),lob=phase==="lobby";
+ $("start").disabled=!(h&&lob);$("skip").disabled=$("stop").disabled=!(h&&!lob);
+ document.querySelectorAll("#gl input").forEach(c=>{c.disabled=!(h&&lob);if(cfg)c.checked=cfg.games.includes(c.value)});
+ [["rn","rounds"],["sec","sec"],["cd","cd"]].forEach(([i,k])=>{const e=$(i);e.disabled=!(h&&lob);if(cfg&&document.activeElement!==e)e.value=cfg[k]})}
+function sendCfg(){send({t:"settings",games:[...document.querySelectorAll("#gl input:checked")].map(c=>c.value),rounds:$("rn").value,sec:$("sec").value,cd:$("cd").value})}
 function onMsg(m){
  if(m.t==="hello")myId=m.id;
- else if(m.t==="state"){hostId=m.host;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
+ else if(m.t==="meta"){titles=m.titles;$("gl").innerHTML=m.games.map(g=>'<label><input type="checkbox" value="'+esc(g)+'"> '+esc(g)+'</label>').join("");updUI()}
+ else if(m.t==="state"){hostId=m.host;phase=m.phase;cfg=m.cfg;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
   if(!ready){ready=true;["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("st").textContent="Jesteś w pokoju „"+$("room").value+"”."}
-  $("start").disabled=$("skip").disabled=hostId!==myId}
- else if(m.t==="titles")titles=m.l;
+  updUI()}
  else if(m.t==="chat")log(m.n,m.x);
- else if(m.t==="round"){$("info").textContent="Zgadnij tytuł!";playUrl(m.url);const e=Date.now()+m.sec*1000;clearInterval(tick);
-  tick=setInterval(()=>{$("big").textContent=Math.max(0,Math.ceil((e-Date.now())/1000))+" s"},250)}
- else if(m.t==="reveal"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";if(widget)widget.pause()}}
+ else if(m.t==="round"){$("info").textContent="Runda "+m.n+"/"+m.total+" – zgadnij tytuł!";playUrl(m.url);countdown(m.sec,"")}
+ else if(m.t==="reveal"){$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";if(widget)widget.pause();countdown(m.cd,"Następna za ")}
+ else if(m.t==="final"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Koniec gry – host może wystartować kolejną.";if(widget)widget.pause()}}
 function playUrl(u){const a=$("aud");clearTimeout(pt);
  if(u.includes("REPLACE")){a.textContent="⚠ W worker/src/tracks.js został placeholder – podmień link SoundCloud.";return}
  a.textContent="Ładowanie utworu…";
@@ -65,11 +77,11 @@ $("jb").onclick=()=>{
  const to=setTimeout(()=>{if(!ready){ws.close();$("jb").disabled=false;$("st").textContent="Brak odpowiedzi serwera w 10 s – spróbuj ponownie."}},10000);
  ws.onopen=()=>send({t:"join",name});
  ws.onmessage=e=>{try{onMsg(JSON.parse(e.data))}catch{}};
- ws.onclose=()=>{clearTimeout(to);ready=false;["g","gb","ci","cb","start","skip"].forEach(i=>$(i).disabled=true);$("jb").disabled=false;$("st").textContent="Rozłączono (pokój pełny, zły adres Workera lub brak dostępu). Spróbuj ponownie."}};
+ ws.onclose=()=>{clearTimeout(to);ready=false;["g","gb","ci","cb","start","skip","stop","play"].forEach(i=>$(i).disabled=true);$("jb").disabled=false;$("st").textContent="Rozłączono (pokój pełny, zły adres Workera lub brak dostępu). Spróbuj ponownie."}};
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
 $("gb").onclick=()=>{$("sug").style.display="none";const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
 $("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};
-$("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
+$("start").onclick=()=>send({t:"start"});$("stop").onclick=()=>send({t:"stop"});$("gl").onchange=sendCfg;["rn","sec","cd"].forEach(i=>$(i).onchange=sendCfg);$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
 const sg=$("sug");let sa=[],si=-1;
 function sugg(){const q=norm($("g").value);sa=q.length<2?[]:titles.filter(t=>norm(t).includes(q)).slice(0,6);si=-1;
  sg.innerHTML=sa.map((t,i)=>'<div data-i="'+i+'">'+esc(t)+'</div>').join("");sg.style.display=sa.length?"block":"none"}
