@@ -15,7 +15,7 @@ button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 12
 input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(--bg);color:var(--fg);font-size:15px;min-width:0}
 .row{display:flex;gap:6px;margin-top:6px}.row input{flex:1}.m{color:var(--mut);font-size:13px}
 #chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
-#big{font-size:24px;text-align:center;margin:6px 0}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}#sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
+#big{font-size:24px;text-align:center;margin:6px 0}#sc.show{opacity:1!important;pointer-events:auto!important}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}#sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
 </style></head><body><main>
 <h1>Touhou Music Room <span class="m">– fan remake</span></h1>
 <div class="c"><h2>Pokój</h2>
@@ -68,17 +68,17 @@ function onMsg(m){
  else if(m.t==="chat")log(m.n,m.x);
  else if(m.t==="round"){done=false;$("info").textContent="Zgadnij tytuł!";playUrl(m.url);let e=Date.now()+m.sec*1000;clearInterval(tick);
   tick=setInterval(()=>{$("big").textContent=Math.max(0,Math.ceil((e-Date.now())/1000))+" s"},250)}
- else if(m.t==="reveal"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";if(widget)widget.pause()}}
-let pt;
-function playUrl(u){const a=$("aud");clearTimeout(pt);
+ else if(m.t==="reveal"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";playing=false;$("sc").classList.remove("show");if(widget)widget.pause()}}
+let pt,playing=false;
+function playUrl(u){const a=$("aud");clearTimeout(pt);playing=false;$("sc").classList.remove("show");
  if(u.includes("REPLACE")){a.textContent="⚠ W tracks.json został placeholder – podmień link SoundCloud.";return}
  a.textContent="Ładowanie utworu…";
- pt=setTimeout(()=>{a.textContent="Nie wystartowało – kliknij ▶ Play (przeglądarka mogła zablokować autoodtwarzanie)."},7000);
+ pt=setTimeout(()=>{$("sc").classList.add("show");a.textContent="Nie wystartowało – kliknij play w odtwarzaczu w prawym dolnym rogu (może pokazać tytuł)."},7000);
  if(widget){widget.load(u,{auto_play:true,visual:false});return}
  $("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
  widget=SC.Widget($("sc"));const E=SC.Widget.Events;
  widget.bind(E.READY,()=>widget.play());
- widget.bind(E.PLAY,()=>{clearTimeout(pt);a.textContent="♪ Gra"});
+ widget.bind(E.PLAY,()=>{playing=true;clearTimeout(pt);$("sc").classList.remove("show");a.textContent="♪ Gra"});
  widget.bind(E.ERROR,()=>{clearTimeout(pt);a.textContent="⚠ SoundCloud zwrócił błąd (link prywatny lub osadzanie wyłączone?)"})}
 // ---- połączenie ----
 $("jb").onclick=()=>{
@@ -94,7 +94,10 @@ $("jb").onclick=()=>{
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
 $("gb").onclick=()=>{$("sug").style.display="none";const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
 $("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};
-$("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
+$("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>{const a=$("aud");
+ if(!widget){a.textContent="Brak załadowanego utworu – host musi wystartować rundę, a w tracks.json muszą być prawdziwe linki SoundCloud.";return}
+ widget.play();setTimeout(()=>{if(!playing){$("sc").classList.add("show");a.textContent="Przeglądarka blokuje start – kliknij play w odtwarzaczu w prawym dolnym rogu (może pokazać tytuł)."}},1500)};
+fetch("tracks.json").then(r=>{if(!r.ok)throw 0;return r.json()}).then(t=>{titles=t.map(x=>x.title);$("aud").textContent="Wczytano utworów: "+t.length}).catch(()=>{$("aud").textContent="⚠ Nie można wczytać tracks.json (otwierasz plik przez file://? użyj GitHub Pages albo lokalnego serwera)"});
 const sg=$("sug");let sa=[],si=-1;
 function sugg(){const q=norm($("g").value);sa=q.length<2?[]:titles.filter(t=>norm(t).includes(q)).slice(0,6);si=-1;
  sg.innerHTML=sa.map((t,i)=>'<div data-i="'+i+'">'+esc(t)+'</div>').join("");sg.style.display=sa.length?"block":"none"}
