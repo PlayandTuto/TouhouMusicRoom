@@ -34,7 +34,9 @@ const $=id=>document.getElementById(id),norm=s=>String(s).toLowerCase().replace(
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const DUR=60;
 // Własny serwer sygnalizacyjny PeerJS (opcjonalnie): dodaj host:"twoj.serwer",port:443,secure:true,path:"/"
-const PEER_OPTS={config:{iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}]}};let titles=[],peer,isHost=false,hostConn,conns=[],players={},name,tracks=[],used=[],round=null,timer,tick,done=false,widget;
+const PEER_OPTS={config:{iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}
+ // ,{urls:"turn:ADRES-TURN:443?transport=tcp",username:"LOGIN",credential:"HASLO"}  <- odkomentuj i uzupełnij dane z dostawcy TURN
+]}};let titles=[],peer,isHost=false,hostConn,conns=[],players={},name,tracks=[],used=[],round=null,timer,tick,done=false,widget;
 const log=(n,t)=>{const d=document.createElement("div");d.innerHTML="<b>"+esc(n)+":</b> "+esc(t);$("chat").append(d);$("chat").scrollTop=1e9};
 const enable=h=>{["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("start").disabled=$("skip").disabled=!h};
 const send=m=>isHost?handle("host",m):hostConn.send(m);
@@ -90,7 +92,7 @@ $("jb").onclick=()=>{
   peer.on("connection",c=>{conns.push(c);c.on("data",m=>handle(c.peer,m));c.on("close",()=>{delete players[c.peer];conns=conns.filter(x=>x!==c);sync()})});
   fetch("tracks.json").then(r=>r.json()).then(t=>{tracks=t;bc({t:"titles",l:t.map(x=>x.title)})});sync();enable(true);$("st").textContent="Jesteś hostem pokoju "+id.slice(4)+". Podaj kod znajomym."});
  peer.on("error",e=>{if(e.type!=="unavailable-id"){$("jb").disabled=false;$("st").textContent=({network:"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?). Spróbuj ponownie.","server-error":"Serwer PeerJS niedostępny – spróbuj za chwilę.","socket-error":"Serwer PeerJS niedostępny – spróbuj za chwilę."})[e.type]||"Błąd: "+e.type;return}
-  $("st").textContent="Łączenie z hostem…";const to=setTimeout(()=>{$("jb").disabled=false;$("st").textContent="Nie udało się połączyć z hostem w 15 s. Host mógł zniknąć albo sieć blokuje P2P. Spróbuj innego kodu pokoju."},15000);peer=new Peer(PEER_OPTS);peer.on("error",e=>{clearTimeout(to);$("jb").disabled=false;$("st").textContent=e.type==="peer-unavailable"?"Host nie odpowiada – niech utworzy pokój od nowa.":e.type==="network"?"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?).":"Błąd: "+e.type});peer.on("open",()=>{hostConn=peer.connect(id,{reliable:true});
+  $("st").textContent="Łączenie z hostem…";const to=setTimeout(()=>{$("jb").disabled=false;$("st").textContent="Nie udało się połączyć z hostem w 15 s. Host mógł zniknąć albo sieć blokuje P2P. Spróbuj innego kodu pokoju."},15000);peer=new Peer(PEER_OPTS);peer.on("error",e=>{clearTimeout(to);$("jb").disabled=false;$("st").textContent=e.type==="peer-unavailable"?"Host nie odpowiada – niech utworzy pokój od nowa.":e.type==="network"?"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?).":"Błąd: "+e.type});peer.on("open",()=>{hostConn=peer.connect(id,{reliable:true});const pc=hostConn.peerConnection;if(pc)pc.oniceconnectionstatechange=()=>{$("st").textContent="Łączenie z hostem… (ICE: "+pc.iceConnectionState+")"};
    hostConn.on("open",()=>{clearTimeout(to);send({t:"join",name});enable(false);$("st").textContent="Dołączono do pokoju "+id.slice(4)});
    hostConn.on("data",onMsg);hostConn.on("close",()=>$("st").textContent="Host się rozłączył – odśwież stronę.")})})};
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
