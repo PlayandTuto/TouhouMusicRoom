@@ -1,0 +1,15 @@
+name = "touhou-music-room"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+[vars]
+# adres Twojej strony na GitHub Pages (sam origin, bez ścieżki)
+ALLOWED_ORIGIN = "https://TWOJ-LOGIN.github.io"

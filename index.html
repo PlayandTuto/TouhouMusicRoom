@@ -2,7 +2,6 @@
 <html lang="pl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Touhou Music Room (fan remake)</title>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://w.soundcloud.com/player/api.js"></script>
 <style>
 :root{--bg:#f4ecea;--fg:#222;--card:#fff;--ac:#c0392b;--mut:#777}
@@ -15,93 +14,62 @@ button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 12
 input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(--bg);color:var(--fg);font-size:15px;min-width:0}
 .row{display:flex;gap:6px;margin-top:6px}.row input{flex:1}.m{color:var(--mut);font-size:13px}
 #chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
-#big{font-size:24px;text-align:center;margin:6px 0}#sc.show{opacity:1!important;pointer-events:auto!important}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}#sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
+#big{font-size:24px;text-align:center;margin:6px 0}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}
+.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}
+#sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
 </style></head><body><main>
 <h1>Touhou Music Room <span class="m">– fan remake</span></h1>
 <div class="c"><h2>Pokój</h2>
 <div class="row"><input id="nick" placeholder="Nick" maxlength="16"><input id="room" placeholder="Kod pokoju" maxlength="24" value="main"></div>
 <div class="row"><button id="jb">Dołącz / utwórz</button></div>
-<p class="m" id="st">Pierwsza osoba w pokoju zostaje hostem (musi zostać do końca gry).</p>
+<p class="m" id="st">Pierwsza osoba w pokoju jest hostem (może startować rundy). Gdy host wyjdzie, rolę przejmuje następna osoba.</p>
 <h2>Gracze</h2><ul id="pl"></ul></div>
-<div class="c"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div>
-<div class="m" id="aud"></div>
+<div class="c"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div><div class="m" id="aud"></div>
 <div class="row"><div class="sg"><input id="g" placeholder="What is the song?" autocomplete="off" disabled><div id="sug"></div></div><button id="gb" disabled>Zgaduj</button></div>
 <div class="row"><button id="start" disabled>Start / następna</button><button id="skip" disabled>Skip</button><button id="play" disabled>▶ Play</button></div></div>
 <div class="c" style="grid-column:1/-1"><h2>Czat</h2><div id="chat"></div><div class="row"><input id="ci" placeholder="Wiadomość" disabled><button id="cb" disabled>Wyślij</button></div></div>
 <iframe id="sc" allow="autoplay"></iframe></main>
 <script>
+// Adres Twojego Workera po wdrożeniu (wss://...). Patrz README.
+const WORKER="wss://touhou-music-room.TWOJA-SUBDOMENA.workers.dev";
 const $=id=>document.getElementById(id),norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,"");
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const DUR=60;
-// Własny serwer sygnalizacyjny PeerJS (opcjonalnie): dodaj host:"twoj.serwer",port:443,secure:true,path:"/"
-const PEER_OPTS={config:{iceServers:[{urls:"stun:stun.l.google.com:19302"},{urls:"stun:stun1.l.google.com:19302"}
- // ,{urls:"turn:ADRES-TURN:443?transport=tcp",username:"LOGIN",credential:"HASLO"}  <- odkomentuj i uzupełnij dane z dostawcy TURN
-]}};let titles=[],peer,isHost=false,hostConn,conns=[],players={},name,tracks=[],used=[],round=null,timer,tick,done=false,widget;
+let ws,myId,hostId,titles=[],widget,tick,pt,ready=false;
 const log=(n,t)=>{const d=document.createElement("div");d.innerHTML="<b>"+esc(n)+":</b> "+esc(t);$("chat").append(d);$("chat").scrollTop=1e9};
-const enable=h=>{["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("start").disabled=$("skip").disabled=!h};
-const send=m=>isHost?handle("host",m):hostConn.send(m);
-// ---- host (trzyma stan i odpowiedzi) ----
-function bc(m){conns.forEach(c=>c.open&&c.send(m));onMsg(m)}
-function sync(){bc({t:"state",p:Object.values(players).map(p=>({n:p.n,s:p.s}))})}
-function handle(id,m){
- if(m.t==="join"){players[id]={n:String(m.name).slice(0,16),s:0,g:false};sync();if(tracks.length)bc({t:"titles",l:tracks.map(x=>x.title)})}
- else if(!players[id])return;
- else if(m.t==="chat")bc({t:"chat",n:players[id].n,x:String(m.x).slice(0,200)});
- else if(m.t==="guess")guess(id,String(m.x));
- else if(id==="host"&&m.t==="start")startRound();
- else if(id==="host"&&m.t==="skip")endRound()}
-async function startRound(){
- if(!tracks.length)tracks=await (await fetch("tracks.json")).json();
- if(round)endRound();
- let pool=tracks.filter((_,i)=>!used.includes(i));if(!pool.length){used=[];pool=tracks}
- const i=tracks.indexOf(pool[Math.random()*pool.length|0]);used.push(i);
- round={tr:tracks[i]};Object.values(players).forEach(p=>p.g=false);
- bc({t:"round",url:round.tr.url,sec:DUR});timer=setTimeout(endRound,DUR*1000);round.end=Date.now()+DUR*1000}
-function guess(id,x){
- if(!round||players[id].g)return;const g=norm(x);if(g.length<2)return;
- const keys=[round.tr.title,...(round.tr.aliases||[])].map(norm);
- if(keys.some(k=>g===k||(g.length>=5&&k.includes(g))||(k.length>=5&&g.includes(k)))){
-  players[id].g=true;players[id].s+=Math.max(1,Math.ceil((round.end-Date.now())/6000));
-  bc({t:"chat",n:"system",x:players[id].n+" zgadł(a)!"});sync();
-  if(Object.values(players).every(p=>p.g))endRound()}}
-function endRound(){if(!round)return;clearTimeout(timer);const r=round;round=null;bc({t:"reveal",title:r.tr.title,game:r.tr.game})}
-// ---- klient (wszyscy, host też) ----
+const send=m=>ws&&ws.readyState===1&&ws.send(JSON.stringify(m));
 function onMsg(m){
- if(m.t==="state")$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
+ if(m.t==="hello")myId=m.id;
+ else if(m.t==="state"){hostId=m.host;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
+  if(!ready){ready=true;["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("st").textContent="Jesteś w pokoju „"+$("room").value+"”."}
+  $("start").disabled=$("skip").disabled=hostId!==myId}
  else if(m.t==="titles")titles=m.l;
  else if(m.t==="chat")log(m.n,m.x);
- else if(m.t==="round"){done=false;$("info").textContent="Zgadnij tytuł!";playUrl(m.url);let e=Date.now()+m.sec*1000;clearInterval(tick);
+ else if(m.t==="round"){$("info").textContent="Zgadnij tytuł!";playUrl(m.url);const e=Date.now()+m.sec*1000;clearInterval(tick);
   tick=setInterval(()=>{$("big").textContent=Math.max(0,Math.ceil((e-Date.now())/1000))+" s"},250)}
- else if(m.t==="reveal"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";playing=false;$("sc").classList.remove("show");if(widget)widget.pause()}}
-let pt,playing=false;
-function playUrl(u){const a=$("aud");clearTimeout(pt);playing=false;$("sc").classList.remove("show");
- if(u.includes("REPLACE")){a.textContent="⚠ W tracks.json został placeholder – podmień link SoundCloud.";return}
+ else if(m.t==="reveal"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";if(widget)widget.pause()}}
+function playUrl(u){const a=$("aud");clearTimeout(pt);
+ if(u.includes("REPLACE")){a.textContent="⚠ W worker/src/tracks.js został placeholder – podmień link SoundCloud.";return}
  a.textContent="Ładowanie utworu…";
- pt=setTimeout(()=>{$("sc").classList.add("show");a.textContent="Nie wystartowało – kliknij play w odtwarzaczu w prawym dolnym rogu (może pokazać tytuł)."},7000);
+ pt=setTimeout(()=>{a.textContent="Nie wystartowało – kliknij ▶ Play (przeglądarka mogła zablokować autoodtwarzanie)."},7000);
  if(widget){widget.load(u,{auto_play:true,visual:false});return}
  $("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
  widget=SC.Widget($("sc"));const E=SC.Widget.Events;
  widget.bind(E.READY,()=>widget.play());
- widget.bind(E.PLAY,()=>{playing=true;clearTimeout(pt);$("sc").classList.remove("show");a.textContent="♪ Gra"});
+ widget.bind(E.PLAY,()=>{clearTimeout(pt);a.textContent="♪ Gra"});
  widget.bind(E.ERROR,()=>{clearTimeout(pt);a.textContent="⚠ SoundCloud zwrócił błąd (link prywatny lub osadzanie wyłączone?)"})}
-// ---- połączenie ----
 $("jb").onclick=()=>{
- name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0);const id="tmr-"+norm($("room").value||"main");$("jb").disabled=true;
- $("st").textContent="Łączenie z serwerem…";peer=new Peer(id,PEER_OPTS);
- peer.on("open",()=>{isHost=true;players.host={n:name,s:0,g:false};
-  peer.on("connection",c=>{conns.push(c);c.on("data",m=>handle(c.peer,m));c.on("close",()=>{delete players[c.peer];conns=conns.filter(x=>x!==c);sync()})});
-  fetch("tracks.json").then(r=>r.json()).then(t=>{tracks=t;bc({t:"titles",l:t.map(x=>x.title)})});sync();enable(true);$("st").textContent="Jesteś hostem pokoju "+id.slice(4)+". Podaj kod znajomym."});
- peer.on("error",e=>{if(e.type!=="unavailable-id"){$("jb").disabled=false;$("st").textContent=({network:"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?). Spróbuj ponownie.","server-error":"Serwer PeerJS niedostępny – spróbuj za chwilę.","socket-error":"Serwer PeerJS niedostępny – spróbuj za chwilę."})[e.type]||"Błąd: "+e.type;return}
-  $("st").textContent="Łączenie z hostem…";const to=setTimeout(()=>{$("jb").disabled=false;$("st").textContent="Nie udało się połączyć z hostem w 15 s. Host mógł zniknąć albo sieć blokuje P2P. Spróbuj innego kodu pokoju."},15000);peer=new Peer(PEER_OPTS);peer.on("error",e=>{clearTimeout(to);$("jb").disabled=false;$("st").textContent=e.type==="peer-unavailable"?"Host nie odpowiada – niech utworzy pokój od nowa.":e.type==="network"?"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?).":"Błąd: "+e.type});peer.on("open",()=>{hostConn=peer.connect(id,{reliable:true});const pc=hostConn.peerConnection;if(pc)pc.oniceconnectionstatechange=()=>{$("st").textContent="Łączenie z hostem… (ICE: "+pc.iceConnectionState+")"};
-   hostConn.on("open",()=>{clearTimeout(to);send({t:"join",name});enable(false);$("st").textContent="Dołączono do pokoju "+id.slice(4)});
-   hostConn.on("data",onMsg);hostConn.on("close",()=>$("st").textContent="Host się rozłączył – odśwież stronę.")})})};
+ const name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0),code=norm($("room").value)||"main";
+ if(WORKER.includes("TWOJA-SUBDOMENA")){$("st").textContent="⚠ Ustaw adres Workera (WORKER) w index.html.";return}
+ $("jb").disabled=true;$("st").textContent="Łączenie…";ready=false;
+ try{ws=new WebSocket(WORKER+"/room/"+code)}catch(e){$("jb").disabled=false;$("st").textContent="Nieprawidłowy adres Workera.";return}
+ const to=setTimeout(()=>{if(!ready){ws.close();$("jb").disabled=false;$("st").textContent="Brak odpowiedzi serwera w 10 s – spróbuj ponownie."}},10000);
+ ws.onopen=()=>send({t:"join",name});
+ ws.onmessage=e=>{try{onMsg(JSON.parse(e.data))}catch{}};
+ ws.onclose=()=>{clearTimeout(to);ready=false;["g","gb","ci","cb","start","skip"].forEach(i=>$(i).disabled=true);$("jb").disabled=false;$("st").textContent="Rozłączono (pokój pełny, zły adres Workera lub brak dostępu). Spróbuj ponownie."}};
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
 $("gb").onclick=()=>{$("sug").style.display="none";const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
 $("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};
-$("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>{const a=$("aud");
- if(!widget){a.textContent="Brak załadowanego utworu – host musi wystartować rundę, a w tracks.json muszą być prawdziwe linki SoundCloud.";return}
- widget.play();setTimeout(()=>{if(!playing){$("sc").classList.add("show");a.textContent="Przeglądarka blokuje start – kliknij play w odtwarzaczu w prawym dolnym rogu (może pokazać tytuł)."}},1500)};
-fetch("tracks.json").then(r=>{if(!r.ok)throw 0;return r.json()}).then(t=>{titles=t.map(x=>x.title);$("aud").textContent="Wczytano utworów: "+t.length}).catch(()=>{$("aud").textContent="⚠ Nie można wczytać tracks.json (otwierasz plik przez file://? użyj GitHub Pages albo lokalnego serwera)"});
+$("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
 const sg=$("sug");let sa=[],si=-1;
 function sugg(){const q=norm($("g").value);sa=q.length<2?[]:titles.filter(t=>norm(t).includes(q)).slice(0,6);si=-1;
  sg.innerHTML=sa.map((t,i)=>'<div data-i="'+i+'">'+esc(t)+'</div>').join("");sg.style.display=sa.length?"block":"none"}
