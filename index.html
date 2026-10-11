@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Touhou Music Room (fan remake)</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://w.soundcloud.com/player/api.js"></script>
+<style>
+:root{--bg:#f4ecea;--fg:#222;--card:#fff;--ac:#c0392b;--mut:#777}
+@media(prefers-color-scheme:dark){:root{--bg:#16121a;--fg:#eee;--card:#241d2b;--mut:#999}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px system-ui,sans-serif}
+main{max-width:900px;margin:0 auto;padding:12px;display:grid;gap:12px;grid-template-columns:1fr 1fr}
+@media(max-width:700px){main{grid-template-columns:1fr}}
+.c{background:var(--card);border-radius:10px;padding:12px}h1{font-size:20px;margin:0;grid-column:1/-1}h2{font-size:15px;margin:0 0 8px}
+button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-size:15px;cursor:pointer}button:disabled{opacity:.4}
+input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(--bg);color:var(--fg);font-size:15px;min-width:0}
+.row{display:flex;gap:6px;margin-top:6px}.row input{flex:1}.m{color:var(--mut);font-size:13px}
+#chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
+#big{font-size:24px;text-align:center;margin:6px 0}#sc{position:absolute;left:-9999px;width:300px;height:166px;border:0}
+</style></head><body><main>
+<h1>Touhou Music Room <span class="m">– fan remake</span></h1>
+<div class="c"><h2>Pokój</h2>
+<div class="row"><input id="nick" placeholder="Nick" maxlength="16"><input id="room" placeholder="Kod pokoju" maxlength="24" value="main"></div>
+<div class="row"><button id="jb">Dołącz / utwórz</button></div>
+<p class="m" id="st">Pierwsza osoba w pokoju zostaje hostem (musi zostać do końca gry).</p>
+<h2>Gracze</h2><ul id="pl"></ul></div>
+<div class="c"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div>
+<div class="row"><input id="g" placeholder="What is the song?" disabled><button id="gb" disabled>Zgaduj</button></div>
+<div class="row"><button id="start" disabled>Start / następna</button><button id="skip" disabled>Skip</button><button id="play" disabled>▶ Play</button></div></div>
+<div class="c" style="grid-column:1/-1"><h2>Czat</h2><div id="chat"></div><div class="row"><input id="ci" placeholder="Wiadomość" disabled><button id="cb" disabled>Wyślij</button></div></div>
+<iframe id="sc" allow="autoplay"></iframe></main>
+<script>
+const $=id=>document.getElementById(id),norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,"");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const DUR=60;let peer,isHost=false,hostConn,conns=[],players={},name,tracks=[],used=[],round=null,timer,tick,done=false,widget;
+const log=(n,t)=>{const d=document.createElement("div");d.innerHTML="<b>"+esc(n)+":</b> "+esc(t);$("chat").append(d);$("chat").scrollTop=1e9};
+const enable=h=>{["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("start").disabled=$("skip").disabled=!h};
+const send=m=>isHost?handle("host",m):hostConn.send(m);
+// ---- host (trzyma stan i odpowiedzi) ----
+function bc(m){conns.forEach(c=>c.open&&c.send(m));onMsg(m)}
+function sync(){bc({t:"state",p:Object.values(players).map(p=>({n:p.n,s:p.s}))})}
+function handle(id,m){
+ if(m.t==="join"){players[id]={n:String(m.name).slice(0,16),s:0,g:false};sync()}
+ else if(!players[id])return;
+ else if(m.t==="chat")bc({t:"chat",n:players[id].n,x:String(m.x).slice(0,200)});
+ else if(m.t==="guess")guess(id,String(m.x));
+ else if(id==="host"&&m.t==="start")startRound();
+ else if(id==="host"&&m.t==="skip")endRound()}
+async function startRound(){
+ if(!tracks.length)tracks=await (await fetch("tracks.json")).json();
+ if(round)endRound();
+ let pool=tracks.filter((_,i)=>!used.includes(i));if(!pool.length){used=[];pool=tracks}
+ const i=tracks.indexOf(pool[Math.random()*pool.length|0]);used.push(i);
+ round={tr:tracks[i]};Object.values(players).forEach(p=>p.g=false);
+ bc({t:"round",url:round.tr.url,sec:DUR});timer=setTimeout(endRound,DUR*1000);round.end=Date.now()+DUR*1000}
+function guess(id,x){
+ if(!round||players[id].g)return;const g=norm(x);if(g.length<2)return;
+ const keys=[round.tr.title,...(round.tr.aliases||[])].map(norm);
+ if(keys.some(k=>g===k||(g.length>=5&&k.includes(g))||(k.length>=5&&g.includes(k)))){
+  players[id].g=true;players[id].s+=Math.max(1,Math.ceil((round.end-Date.now())/6000));
+  bc({t:"chat",n:"system",x:players[id].n+" zgadł(a)!"});sync();
+  if(Object.values(players).every(p=>p.g))endRound()}}
+function endRound(){if(!round)return;clearTimeout(timer);const r=round;round=null;bc({t:"reveal",title:r.tr.title,game:r.tr.game})}
+// ---- klient (wszyscy, host też) ----
+function onMsg(m){
+ if(m.t==="state")$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
+ else if(m.t==="chat")log(m.n,m.x);
+ else if(m.t==="round"){done=false;$("info").textContent="Zgadnij tytuł!";playUrl(m.url);let e=Date.now()+m.sec*1000;clearInterval(tick);
+  tick=setInterval(()=>{$("big").textContent=Math.max(0,Math.ceil((e-Date.now())/1000))+" s"},250)}
+ else if(m.t==="reveal"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";if(widget)widget.pause()}}
+function playUrl(u){$("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
+ widget=SC.Widget($("sc"));widget.bind(SC.Widget.Events.READY,()=>widget.play())}
+// ---- połączenie ----
+$("jb").onclick=()=>{
+ name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0);const id="tmr-"+norm($("room").value||"main");$("jb").disabled=true;
+ peer=new Peer(id);
+ peer.on("open",()=>{isHost=true;players.host={n:name,s:0,g:false};
+  peer.on("connection",c=>{conns.push(c);c.on("data",m=>handle(c.peer,m));c.on("close",()=>{delete players[c.peer];conns=conns.filter(x=>x!==c);sync()})});
+  sync();enable(true);$("st").textContent="Jesteś hostem pokoju "+id.slice(4)+". Podaj kod znajomym."});
+ peer.on("error",e=>{if(e.type!=="unavailable-id"){$("st").textContent="Błąd: "+e.type;return}
+  peer=new Peer();peer.on("open",()=>{hostConn=peer.connect(id,{reliable:true});
+   hostConn.on("open",()=>{send({t:"join",name});enable(false);$("st").textContent="Dołączono do pokoju "+id.slice(4)});
+   hostConn.on("data",onMsg);hostConn.on("close",()=>$("st").textContent="Host się rozłączył – odśwież stronę.")})})};
+$("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
+$("gb").onclick=()=>{const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
+$("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};$("g").onkeydown=e=>{if(e.key==="Enter")$("gb").click()};
+$("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
+</script></body></html>
