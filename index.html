@@ -15,7 +15,7 @@ input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(-
 .row{display:flex;gap:6px;margin-top:6px}.row input{flex:1}.m{color:var(--mut);font-size:13px}
 #chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
 #big{font-size:24px;text-align:center;margin:6px 0}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}
-label{display:block;margin-top:8px;font-size:14px}#gl label{display:flex;gap:6px;margin:3px 0;align-items:center}input[type=number]{width:80px;flex:none!important;margin-left:6px}
+label{display:block;margin-top:8px;font-size:14px}#gl label{display:flex;gap:6px;margin:3px 0;align-items:center}#gl{max-height:240px;overflow:auto}.pg{margin-bottom:8px}.pg>label{font-weight:600}.pg .g{margin-left:18px}.off{opacity:.45}input[type=number]{width:80px;flex:none!important;margin-left:6px}
 .sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}
 #sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
 </style></head><body><main>
@@ -46,12 +46,15 @@ const isHost=()=>hostId===myId;
 function countdown(sec,pre){const e=Date.now()+sec*1000;clearInterval(tick);const f=()=>{const s=Math.max(0,Math.ceil((e-Date.now())/1000));$("big").textContent=pre+s+" s";if(!s)clearInterval(tick)};f();tick=setInterval(f,250)}
 function updUI(){const h=isHost(),lob=phase==="lobby";
  $("start").disabled=!(h&&lob);$("skip").disabled=$("stop").disabled=!(h&&!lob);
- document.querySelectorAll("#gl input").forEach(c=>{c.disabled=!(h&&lob);if(cfg)c.checked=cfg.games.includes(c.value)});
+ document.querySelectorAll("#gl .pg").forEach(pg=>{const gs=[...pg.querySelectorAll("input[data-g]")];
+  gs.forEach(c=>{c.disabled=c.hasAttribute("data-off")||!(h&&lob);if(cfg)c.checked=cfg.games.includes(c.value)});
+  const on=gs.filter(c=>!c.hasAttribute("data-off")),sel=on.filter(c=>c.checked).length,pc=pg.querySelector("input[data-p]");
+  pc.disabled=!on.length||!(h&&lob);pc.checked=on.length>0&&sel===on.length;pc.indeterminate=sel>0&&sel<on.length});
  [["rn","rounds"],["sec","sec"],["cd","cd"]].forEach(([i,k])=>{const e=$(i);e.disabled=!(h&&lob);if(cfg&&document.activeElement!==e)e.value=cfg[k]})}
-function sendCfg(){send({t:"settings",games:[...document.querySelectorAll("#gl input:checked")].map(c=>c.value),rounds:$("rn").value,sec:$("sec").value,cd:$("cd").value})}
+function sendCfg(){send({t:"settings",games:[...document.querySelectorAll("#gl input[data-g]:checked")].map(c=>c.value),rounds:$("rn").value,sec:$("sec").value,cd:$("cd").value})}
 function onMsg(m){
  if(m.t==="hello")myId=m.id;
- else if(m.t==="meta"){titles=m.titles;$("gl").innerHTML=m.games.map(g=>'<label><input type="checkbox" value="'+esc(g)+'"> '+esc(g)+'</label>').join("");updUI()}
+ else if(m.t==="meta"){titles=m.titles;$("gl").innerHTML=m.groups.map(g=>'<div class="pg"><label><input type="checkbox" data-p> '+esc(g.platform)+'</label>'+g.games.map(x=>'<label class="g'+(x.c?'':' off')+'"><input type="checkbox" data-g value="'+esc(x.n)+'"'+(x.c?'':' disabled data-off')+'> '+esc(x.n)+' <span class="m">('+x.c+')</span></label>').join("")+'</div>').join("");updUI()}
  else if(m.t==="state"){hostId=m.host;phase=m.phase;cfg=m.cfg;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
   if(!ready){ready=true;["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("st").textContent="Jesteś w pokoju „"+$("room").value+"”."}
   updUI()}
@@ -81,7 +84,7 @@ $("jb").onclick=()=>{
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
 $("gb").onclick=()=>{$("sug").style.display="none";const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
 $("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};
-$("start").onclick=()=>send({t:"start"});$("stop").onclick=()=>send({t:"stop"});$("gl").onchange=sendCfg;["rn","sec","cd"].forEach(i=>$(i).onchange=sendCfg);$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
+$("start").onclick=()=>send({t:"start"});$("stop").onclick=()=>send({t:"stop"});$("gl").onchange=e=>{if(e.target.hasAttribute("data-p"))e.target.closest(".pg").querySelectorAll("input[data-g]:not([data-off])").forEach(c=>c.checked=e.target.checked);sendCfg()};["rn","sec","cd"].forEach(i=>$(i).onchange=sendCfg);$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
 const sg=$("sug");let sa=[],si=-1;
 function sugg(){const q=norm($("g").value);sa=q.length<2?[]:titles.filter(t=>norm(t).includes(q)).slice(0,6);si=-1;
  sg.innerHTML=sa.map((t,i)=>'<div data-i="'+i+'">'+esc(t)+'</div>').join("");sg.style.display=sa.length?"block":"none"}
