@@ -16,7 +16,8 @@ input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(-
 #chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
 #big{font-size:24px;text-align:center;margin:6px 0}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}
 label{display:block;margin-top:8px;font-size:14px}#gl label{display:flex;gap:6px;margin:3px 0;align-items:center}#gl{max-height:240px;overflow:auto}.pg{margin-bottom:8px}.pg>label{font-weight:600}.pg .g{margin-left:18px}.off{opacity:.45}input[type=number]{width:80px;flex:none!important;margin-left:6px}
-.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}
+.col{display:flex;flex-direction:column;min-height:230px}.vrow{align-items:center}.vrow input{padding:0;border:0;accent-color:var(--ac);background:none}
+.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;bottom:100%;max-height:200px;overflow:auto;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}
 #sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
 </style></head><body><main>
 <h1>Touhou Music Room <span class="m">– fan remake</span></h1>
@@ -25,9 +26,10 @@ label{display:block;margin-top:8px;font-size:14px}#gl label{display:flex;gap:6px
 <div class="row"><button id="jb">Dołącz / utwórz</button></div>
 <p class="m" id="st">Pierwsza osoba w pokoju jest hostem (może startować rundy). Gdy host wyjdzie, rolę przejmuje następna osoba.</p>
 <h2>Gracze</h2><ul id="pl"></ul></div>
-<div class="c"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div><div class="m" id="aud"></div>
-<div class="row"><div class="sg"><input id="g" placeholder="What is the song?" autocomplete="off" disabled><div id="sug"></div></div><button id="gb" disabled>Zgaduj</button></div>
-<div class="row"><button id="start" disabled>Start gry</button><button id="skip" disabled>Skip</button><button id="stop" disabled>Stop</button><button id="play" disabled>▶ Play</button></div></div>
+<div class="c col"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div><div class="m" id="aud"></div>
+<div class="row"><button id="start" disabled>Start gry</button><button id="skip" disabled>Skip</button><button id="stop" disabled>Stop</button><button id="play" disabled>▶ Play</button></div>
+<div class="row vrow"><span title="Głośność">🔊</span><input id="vol" type="range" min="0" max="100" value="70"></div>
+<div class="row" style="margin-top:auto;padding-top:12px"><div class="sg"><input id="g" placeholder="What is the song?" autocomplete="off" disabled><div id="sug"></div></div><button id="gb" disabled>Zgaduj</button></div></div>
 <div class="c"><h2>Ustawienia gry <span class="m">(zmienia host, w lobby)</span></h2><div class="m">Dozwolone gry:</div><div id="gl"></div>
 <label>Liczba rund <input id="rn" type="number" min="1" max="100" disabled></label>
 <label>Czas na zgadywanie (s) <input id="sec" type="number" min="10" max="180" disabled></label>
@@ -55,7 +57,7 @@ function sendCfg(){send({t:"settings",games:[...document.querySelectorAll("#gl i
 function onMsg(m){
  if(m.t==="hello")myId=m.id;
  else if(m.t==="meta"){titles=m.titles;$("gl").innerHTML=m.groups.map(g=>'<div class="pg"><label><input type="checkbox" data-p> '+esc(g.platform)+'</label>'+g.games.map(x=>'<label class="g'+(x.c?'':' off')+'"><input type="checkbox" data-g value="'+esc(x.n)+'"'+(x.c?'':' disabled data-off')+'> '+esc(x.n)+' <span class="m">('+x.c+')</span></label>').join("")+'</div>').join("");updUI()}
- else if(m.t==="state"){hostId=m.host;phase=m.phase;cfg=m.cfg;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
+ else if(m.t==="state"){hostId=m.host;phase=m.phase;cfg=m.cfg;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+(p.id===m.host?"👑 ":"")+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
   if(!ready){ready=true;["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("st").textContent="Jesteś w pokoju „"+$("room").value+"”."}
   updUI()}
  else if(m.t==="chat")log(m.n,m.x);
@@ -69,8 +71,8 @@ function playUrl(u){const a=$("aud");clearTimeout(pt);
  if(widget){widget.load(u,{auto_play:true,visual:false});return}
  $("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
  widget=SC.Widget($("sc"));const E=SC.Widget.Events;
- widget.bind(E.READY,()=>widget.play());
- widget.bind(E.PLAY,()=>{clearTimeout(pt);a.textContent="♪ Gra"});
+ widget.bind(E.READY,()=>{applyVol();widget.play()});
+ widget.bind(E.PLAY,()=>{applyVol();clearTimeout(pt);a.textContent="♪ Gra"});
  widget.bind(E.ERROR,()=>{clearTimeout(pt);a.textContent="⚠ SoundCloud zwrócił błąd (link prywatny lub osadzanie wyłączone?)"})}
 $("jb").onclick=()=>{
  const name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0),code=norm($("room").value)||"main";
@@ -94,4 +96,7 @@ $("g").addEventListener("keydown",e=>{
  if(e.key==="Enter"){if(si>=0)$("g").value=sa[si];$("gb").click()}
  else if(sa.length&&(e.key==="ArrowDown"||e.key==="ArrowUp")){e.preventDefault();si=(si+(e.key==="ArrowDown"?1:-1)+sa.length)%sa.length;[...sg.children].forEach((c,i)=>c.className=i===si?"a":"")}});
 $("g").onblur=()=>setTimeout(()=>sg.style.display="none",150);
+function applyVol(){if(widget)widget.setVolume(+$("vol").value)}
+try{const sv=localStorage.getItem("tmrVol");if(sv!==null)$("vol").value=+sv}catch{}
+$("vol").oninput=()=>{applyVol();try{localStorage.setItem("tmrVol",$("vol").value)}catch{}};
 </script></body></html>
