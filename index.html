@@ -15,7 +15,7 @@ button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 12
 input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(--bg);color:var(--fg);font-size:15px;min-width:0}
 .row{display:flex;gap:6px;margin-top:6px}.row input{flex:1}.m{color:var(--mut);font-size:13px}
 #chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
-#big{font-size:24px;text-align:center;margin:6px 0}#sc{position:absolute;left:-9999px;width:300px;height:166px;border:0}
+#big{font-size:24px;text-align:center;margin:6px 0}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;top:100%;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}#sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
 </style></head><body><main>
 <h1>Touhou Music Room <span class="m">– fan remake</span></h1>
 <div class="c"><h2>Pokój</h2>
@@ -24,14 +24,15 @@ input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(-
 <p class="m" id="st">Pierwsza osoba w pokoju zostaje hostem (musi zostać do końca gry).</p>
 <h2>Gracze</h2><ul id="pl"></ul></div>
 <div class="c"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div>
-<div class="row"><input id="g" placeholder="What is the song?" disabled><button id="gb" disabled>Zgaduj</button></div>
+<div class="m" id="aud"></div>
+<div class="row"><div class="sg"><input id="g" placeholder="What is the song?" autocomplete="off" disabled><div id="sug"></div></div><button id="gb" disabled>Zgaduj</button></div>
 <div class="row"><button id="start" disabled>Start / następna</button><button id="skip" disabled>Skip</button><button id="play" disabled>▶ Play</button></div></div>
 <div class="c" style="grid-column:1/-1"><h2>Czat</h2><div id="chat"></div><div class="row"><input id="ci" placeholder="Wiadomość" disabled><button id="cb" disabled>Wyślij</button></div></div>
 <iframe id="sc" allow="autoplay"></iframe></main>
 <script>
 const $=id=>document.getElementById(id),norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,"");
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const DUR=60;let peer,isHost=false,hostConn,conns=[],players={},name,tracks=[],used=[],round=null,timer,tick,done=false,widget;
+const DUR=60;let titles=[],peer,isHost=false,hostConn,conns=[],players={},name,tracks=[],used=[],round=null,timer,tick,done=false,widget;
 const log=(n,t)=>{const d=document.createElement("div");d.innerHTML="<b>"+esc(n)+":</b> "+esc(t);$("chat").append(d);$("chat").scrollTop=1e9};
 const enable=h=>{["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("start").disabled=$("skip").disabled=!h};
 const send=m=>isHost?handle("host",m):hostConn.send(m);
@@ -39,7 +40,7 @@ const send=m=>isHost?handle("host",m):hostConn.send(m);
 function bc(m){conns.forEach(c=>c.open&&c.send(m));onMsg(m)}
 function sync(){bc({t:"state",p:Object.values(players).map(p=>({n:p.n,s:p.s}))})}
 function handle(id,m){
- if(m.t==="join"){players[id]={n:String(m.name).slice(0,16),s:0,g:false};sync()}
+ if(m.t==="join"){players[id]={n:String(m.name).slice(0,16),s:0,g:false};sync();if(tracks.length)bc({t:"titles",l:tracks.map(x=>x.title)})}
  else if(!players[id])return;
  else if(m.t==="chat")bc({t:"chat",n:players[id].n,x:String(m.x).slice(0,200)});
  else if(m.t==="guess")guess(id,String(m.x));
@@ -63,25 +64,44 @@ function endRound(){if(!round)return;clearTimeout(timer);const r=round;round=nul
 // ---- klient (wszyscy, host też) ----
 function onMsg(m){
  if(m.t==="state")$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
+ else if(m.t==="titles")titles=m.l;
  else if(m.t==="chat")log(m.n,m.x);
  else if(m.t==="round"){done=false;$("info").textContent="Zgadnij tytuł!";playUrl(m.url);let e=Date.now()+m.sec*1000;clearInterval(tick);
   tick=setInterval(()=>{$("big").textContent=Math.max(0,Math.ceil((e-Date.now())/1000))+" s"},250)}
  else if(m.t==="reveal"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";if(widget)widget.pause()}}
-function playUrl(u){$("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
- widget=SC.Widget($("sc"));widget.bind(SC.Widget.Events.READY,()=>widget.play())}
+let pt;
+function playUrl(u){const a=$("aud");clearTimeout(pt);
+ if(u.includes("REPLACE")){a.textContent="⚠ W tracks.json został placeholder – podmień link SoundCloud.";return}
+ a.textContent="Ładowanie utworu…";
+ pt=setTimeout(()=>{a.textContent="Nie wystartowało – kliknij ▶ Play (przeglądarka mogła zablokować autoodtwarzanie)."},7000);
+ if(widget){widget.load(u,{auto_play:true,visual:false});return}
+ $("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
+ widget=SC.Widget($("sc"));const E=SC.Widget.Events;
+ widget.bind(E.READY,()=>widget.play());
+ widget.bind(E.PLAY,()=>{clearTimeout(pt);a.textContent="♪ Gra"});
+ widget.bind(E.ERROR,()=>{clearTimeout(pt);a.textContent="⚠ SoundCloud zwrócił błąd (link prywatny lub osadzanie wyłączone?)"})}
 // ---- połączenie ----
 $("jb").onclick=()=>{
  name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0);const id="tmr-"+norm($("room").value||"main");$("jb").disabled=true;
  peer=new Peer(id);
  peer.on("open",()=>{isHost=true;players.host={n:name,s:0,g:false};
   peer.on("connection",c=>{conns.push(c);c.on("data",m=>handle(c.peer,m));c.on("close",()=>{delete players[c.peer];conns=conns.filter(x=>x!==c);sync()})});
-  sync();enable(true);$("st").textContent="Jesteś hostem pokoju "+id.slice(4)+". Podaj kod znajomym."});
+  fetch("tracks.json").then(r=>r.json()).then(t=>{tracks=t;bc({t:"titles",l:t.map(x=>x.title)})});sync();enable(true);$("st").textContent="Jesteś hostem pokoju "+id.slice(4)+". Podaj kod znajomym."});
  peer.on("error",e=>{if(e.type!=="unavailable-id"){$("st").textContent="Błąd: "+e.type;return}
   peer=new Peer();peer.on("open",()=>{hostConn=peer.connect(id,{reliable:true});
    hostConn.on("open",()=>{send({t:"join",name});enable(false);$("st").textContent="Dołączono do pokoju "+id.slice(4)});
    hostConn.on("data",onMsg);hostConn.on("close",()=>$("st").textContent="Host się rozłączył – odśwież stronę.")})})};
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
-$("gb").onclick=()=>{const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
-$("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};$("g").onkeydown=e=>{if(e.key==="Enter")$("gb").click()};
+$("gb").onclick=()=>{$("sug").style.display="none";const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
+$("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};
 $("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
+const sg=$("sug");let sa=[],si=-1;
+function sugg(){const q=norm($("g").value);sa=q.length<2?[]:titles.filter(t=>norm(t).includes(q)).slice(0,6);si=-1;
+ sg.innerHTML=sa.map((t,i)=>'<div data-i="'+i+'">'+esc(t)+'</div>').join("");sg.style.display=sa.length?"block":"none"}
+$("g").oninput=sugg;
+sg.onmousedown=e=>{const i=e.target.dataset.i;if(i!=null){e.preventDefault();$("g").value=sa[i];$("gb").click()}};
+$("g").addEventListener("keydown",e=>{
+ if(e.key==="Enter"){if(si>=0)$("g").value=sa[si];$("gb").click()}
+ else if(sa.length&&(e.key==="ArrowDown"||e.key==="ArrowUp")){e.preventDefault();si=(si+(e.key==="ArrowDown"?1:-1)+sa.length)%sa.length;[...sg.children].forEach((c,i)=>c.className=i===si?"a":"")}});
+$("g").onblur=()=>setTimeout(()=>sg.style.display="none",150);
 </script></body></html>
