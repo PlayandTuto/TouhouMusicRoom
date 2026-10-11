@@ -85,13 +85,13 @@ function playUrl(u){const a=$("aud");clearTimeout(pt);playing=false;$("sc").clas
 // ---- połączenie ----
 $("jb").onclick=()=>{
  name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0);const id="tmr-"+norm($("room").value||"main");$("jb").disabled=true;
- peer=new Peer(id,PEER_OPTS);
+ $("st").textContent="Łączenie z serwerem…";peer=new Peer(id,PEER_OPTS);
  peer.on("open",()=>{isHost=true;players.host={n:name,s:0,g:false};
   peer.on("connection",c=>{conns.push(c);c.on("data",m=>handle(c.peer,m));c.on("close",()=>{delete players[c.peer];conns=conns.filter(x=>x!==c);sync()})});
   fetch("tracks.json").then(r=>r.json()).then(t=>{tracks=t;bc({t:"titles",l:t.map(x=>x.title)})});sync();enable(true);$("st").textContent="Jesteś hostem pokoju "+id.slice(4)+". Podaj kod znajomym."});
  peer.on("error",e=>{if(e.type!=="unavailable-id"){$("jb").disabled=false;$("st").textContent=({network:"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?). Spróbuj ponownie.","server-error":"Serwer PeerJS niedostępny – spróbuj za chwilę.","socket-error":"Serwer PeerJS niedostępny – spróbuj za chwilę."})[e.type]||"Błąd: "+e.type;return}
-  peer=new Peer(PEER_OPTS);peer.on("error",e=>{$("jb").disabled=false;$("st").textContent=e.type==="peer-unavailable"?"Host nie odpowiada – niech utworzy pokój od nowa.":e.type==="network"?"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?).":"Błąd: "+e.type});peer.on("open",()=>{hostConn=peer.connect(id,{reliable:true});
-   hostConn.on("open",()=>{send({t:"join",name});enable(false);$("st").textContent="Dołączono do pokoju "+id.slice(4)});
+  $("st").textContent="Łączenie z hostem…";const to=setTimeout(()=>{$("jb").disabled=false;$("st").textContent="Nie udało się połączyć z hostem w 15 s. Host mógł zniknąć albo sieć blokuje P2P. Spróbuj innego kodu pokoju."},15000);peer=new Peer(PEER_OPTS);peer.on("error",e=>{clearTimeout(to);$("jb").disabled=false;$("st").textContent=e.type==="peer-unavailable"?"Host nie odpowiada – niech utworzy pokój od nowa.":e.type==="network"?"Brak połączenia z serwerem PeerJS (sieć, adblock, VPN?).":"Błąd: "+e.type});peer.on("open",()=>{hostConn=peer.connect(id,{reliable:true});
+   hostConn.on("open",()=>{clearTimeout(to);send({t:"join",name});enable(false);$("st").textContent="Dołączono do pokoju "+id.slice(4)});
    hostConn.on("data",onMsg);hostConn.on("close",()=>$("st").textContent="Host się rozłączył – odśwież stronę.")})})};
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
 $("gb").onclick=()=>{$("sug").style.display="none";const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
