@@ -2,50 +2,88 @@
 <html lang="pl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Touhou Music Room (fan remake)</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("tmrTheme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light")}catch(e){document.documentElement.dataset.theme="light"}</script>
 <script src="https://w.soundcloud.com/player/api.js"></script>
 <style>
 :root{--bg:#f4ecea;--fg:#222;--card:#fff;--ac:#c0392b;--mut:#777}
-@media(prefers-color-scheme:dark){:root{--bg:#16121a;--fg:#eee;--card:#241d2b;--mut:#999}}
+:root[data-theme="dark"]{--bg:#16121a;--fg:#eee;--card:#241d2b;--mut:#999}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px system-ui,sans-serif}
 main{max-width:900px;margin:0 auto;padding:12px;display:grid;gap:12px;grid-template-columns:1fr 1fr}
 @media(max-width:700px){main{grid-template-columns:1fr}}
-.c{background:var(--card);border-radius:10px;padding:12px}h1{font-size:20px;margin:0;grid-column:1/-1}h2{font-size:15px;margin:0 0 8px}
-button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-size:15px;cursor:pointer}button:disabled{opacity:.4}
+header{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:var(--card);border-radius:10px;padding:8px 12px}
+h1{font-size:20px;margin:0}.bar{display:flex;gap:6px}
+.c{background:var(--card);border-radius:10px;padding:12px}h2{font-size:15px;margin:0 0 8px}
+button,.btn{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 12px;font-size:15px;cursor:pointer;text-decoration:none;display:inline-block}button:disabled{opacity:.4;cursor:default}
+.ghost{background:transparent;color:var(--fg);border:1px solid var(--mut)}#dc{background:#5865F2}
 input{padding:8px;border-radius:6px;border:1px solid var(--mut);background:var(--bg);color:var(--fg);font-size:15px;min-width:0}
 .row{display:flex;gap:6px;margin-top:6px}.row input{flex:1}.m{color:var(--mut);font-size:13px}
 #chat{height:180px;overflow:auto;font-size:14px}ul{list-style:none;padding:0;margin:0}li{display:flex;justify-content:space-between;padding:3px 0}
 #big{font-size:24px;text-align:center;margin:6px 0}#sc{position:fixed;right:0;bottom:0;width:300px;height:166px;border:0;opacity:0;pointer-events:none}
-label{display:block;margin-top:8px;font-size:14px}#gl label{display:flex;gap:6px;margin:3px 0;align-items:center}#gl{max-height:240px;overflow:auto}.pg{margin-bottom:8px}.pg>label{font-weight:600}.pg .g{margin-left:18px}.off{opacity:.45}input[type=number]{width:80px;flex:none!important;margin-left:6px}
+label{display:block;margin-top:8px;font-size:14px}#gl label{display:flex;gap:6px;margin:3px 0;align-items:center}#gl{max-height:240px;overflow:auto}
+.pg{margin-bottom:8px}.pg>label{font-weight:600}.pg .g{margin-left:18px}.off{opacity:.45}
+input[type=number]{width:80px;flex:none!important;margin-left:6px}
 .col{display:flex;flex-direction:column;min-height:230px}.vrow{align-items:center}.vrow input{padding:0;border:0;accent-color:var(--ac);background:none}
-.sg{position:relative;flex:1;display:flex}#sug{position:absolute;left:0;right:0;bottom:100%;max-height:200px;overflow:auto;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}
-#sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}
+.sg{position:relative;flex:1;display:flex}
+#sug{position:absolute;left:0;right:0;bottom:100%;max-height:200px;overflow:auto;background:var(--card);border:1px solid var(--mut);border-radius:6px;z-index:5;display:none}
+#sug div{padding:6px 8px;cursor:pointer;font-size:14px}#sug .a,#sug div:hover{background:var(--ac);color:#fff}#sug .a .m,#sug div:hover .m{color:#fff}
+@keyframes sh{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+#g.bad{animation:sh .35s;border-color:#e74c3c;background:rgba(231,76,60,.2)}#g.good{border-color:#2ecc71;background:rgba(46,204,113,.2)}
+#fb{min-height:18px;margin-top:6px}#fb.bad{color:#e74c3c}#fb.good{color:#2ecc71}
 </style></head><body><main>
-<h1>Touhou Music Room <span class="m">– fan remake</span></h1>
-<div class="c"><h2>Pokój</h2>
-<div class="row"><input id="nick" placeholder="Nick" maxlength="16"><input id="room" placeholder="Kod pokoju" maxlength="24" value="main"></div>
-<div class="row"><button id="jb">Dołącz / utwórz</button></div>
-<p class="m" id="st">Pierwsza osoba w pokoju jest hostem (może startować rundy). Gdy host wyjdzie, rolę przejmuje następna osoba.</p>
-<h2>Gracze</h2><ul id="pl"></ul></div>
-<div class="c col"><h2>Runda</h2><div id="big">—</div><div class="m" id="info"></div><div class="m" id="aud"></div>
-<div class="row"><button id="start" disabled>Start gry</button><button id="skip" disabled>Skip</button><button id="stop" disabled>Stop</button><button id="play" disabled>▶ Play</button></div>
-<div class="row vrow"><span title="Głośność">🔊</span><input id="vol" type="range" min="0" max="100" value="70"></div>
-<div class="row" style="margin-top:auto;padding-top:12px"><div class="sg"><input id="g" placeholder="What is the song?" autocomplete="off" disabled><div id="sug"></div></div><button id="gb" disabled>Zgaduj</button></div></div>
-<div class="c"><h2>Ustawienia gry <span class="m">(zmienia host, w lobby)</span></h2><div class="m">Dozwolone gry:</div><div id="gl"></div>
-<label>Liczba rund <input id="rn" type="number" min="1" max="100" disabled></label>
-<label>Czas na zgadywanie (s) <input id="sec" type="number" min="10" max="180" disabled></label>
-<label>Przerwa między rundami (s) <input id="cd" type="number" min="3" max="60" disabled></label></div>
-<div class="c"><h2>Czat</h2><div id="chat"></div><div class="row"><input id="ci" placeholder="Wiadomość" disabled><button id="cb" disabled>Wyślij</button></div></div>
+<header><h1>Touhou Music Room <span class="m" data-i="sub"></span></h1>
+<div class="bar"><button id="thm" class="ghost" data-ti="theme"></button><button id="lng" class="ghost"></button><a id="dc" class="btn" target="_blank" rel="noopener" data-ti="dctitle">Discord</a></div></header>
+<div class="c"><h2 data-i="room"></h2>
+<div class="row"><input id="nick" maxlength="16" data-ph="nick"><input id="room" maxlength="24" value="main" data-ph="code"></div>
+<div class="row"><button id="jb" data-i="join"></button></div>
+<p class="m" id="st"></p>
+<h2 data-i="players"></h2><ul id="pl"></ul></div>
+<div class="c col"><h2 data-i="round"></h2><div id="big">—</div><div class="m" id="info"></div><div class="m" id="aud"></div>
+<div class="row"><button id="start" disabled data-i="start"></button><button id="skip" disabled data-i="skip"></button><button id="stop" disabled data-i="stop"></button><button id="play" disabled data-i="play"></button></div>
+<div class="row vrow"><span data-ti="vol">🔊</span><input id="vol" type="range" min="0" max="100" value="70"></div>
+<div id="fb" class="m"></div>
+<div class="row" style="margin-top:auto"><div class="sg"><input id="g" autocomplete="off" disabled data-ph="guessph"><div id="sug"></div></div><button id="gb" disabled data-i="guess"></button></div></div>
+<div class="c"><h2><span data-i="settings"></span> <span class="m" data-i="sethint"></span></h2><div class="m" data-i="allowed"></div><div id="gl"></div>
+<label><span data-i="rounds"></span><input id="rn" type="number" min="1" max="100" disabled></label>
+<label><span data-i="sec"></span><input id="sec" type="number" min="10" max="180" disabled></label>
+<label><span data-i="cd"></span><input id="cd" type="number" min="3" max="60" disabled></label></div>
+<div class="c"><h2 data-i="chat"></h2><div id="chat"></div><div class="row"><input id="ci" disabled data-ph="msg"><button id="cb" disabled data-i="send"></button></div></div>
 <iframe id="sc" allow="autoplay"></iframe></main>
 <script>
-// Adres Twojego Workera po wdrożeniu (wss://...). Patrz README.
-const WORKER="wss://touhou-music-room.touhoumusicroom.workers.dev";
+const WORKER="wss://touhou-music-room.touhoumusicroom.workers.dev";   // adres Twojego Workera (wss://...)
+const DISCORD_URL="https://discord.gg/REPLACE";                         // wstaw link zaproszenia do swojego Discorda
+const I18N={
+pl:{sub:"– fan remake",room:"Pokój",nick:"Nick",code:"Kod pokoju",join:"Dołącz / utwórz",intro:"Pierwsza osoba w pokoju jest hostem (może startować rundy). Gdy host wyjdzie, rolę przejmuje następna osoba.",players:"Gracze",round:"Runda",start:"Start gry",skip:"Skip",stop:"Stop",play:"▶ Play",guessph:"Jaki to utwór?",guess:"Zgaduj",vol:"Głośność",settings:"Ustawienia gry",sethint:"(zmienia host, w lobby)",allowed:"Dozwolone gry:",rounds:"Liczba rund",sec:"Czas na zgadywanie (s)",cd:"Przerwa między rundami (s)",chat:"Czat",msg:"Wiadomość",send:"Wyślij",theme:"Zmień motyw",dctitle:"Dołącz do naszego Discorda",other:"Inne",
+needw:"⚠ Ustaw adres Workera (WORKER) w index.html.",conn:"Łączenie…",badurl:"Nieprawidłowy adres Workera.",to:"Brak odpowiedzi serwera w 10 s – spróbuj ponownie.",closed:"Rozłączono (pokój pełny, zły adres Workera lub brak dostępu). Spróbuj ponownie.",joined:"Jesteś w pokoju „{0}”.",
+rinfo:"Runda {0}/{1} – zgadnij tytuł!",ans:"Odpowiedź: {0} ({1})",next:"Następna za ",fin:"Koniec gry – host może wystartować kolejną.",
+aload:"Ładowanie utworu…",aplay:"♪ Gra",astuck:"Nie wystartowało – kliknij ▶ Play (przeglądarka mogła zablokować autoodtwarzanie).",aerr:"⚠ SoundCloud zwrócił błąd (link prywatny lub osadzanie wyłączone?)",aph:"⚠ W worker/src/tracks.js został placeholder – podmień link SoundCloud.",
+guessed:"{0} zgadł(a)!",final:"Koniec gry! ",notr:"Brak utworów dla wybranych gier.",lim:"Dostępnych utworów: {0} – tyle rund zagramy.",wrong:"✗ Źle",right:"✓ Dobrze!"},
+en:{sub:"– fan remake",room:"Room",nick:"Nickname",code:"Room code",join:"Join / create",intro:"The first person in the room is the host (can start rounds). If the host leaves, the next person takes over.",players:"Players",round:"Round",start:"Start game",skip:"Skip",stop:"Stop",play:"▶ Play",guessph:"What is the song?",guess:"Guess",vol:"Volume",settings:"Game settings",sethint:"(host only, in lobby)",allowed:"Allowed games:",rounds:"Rounds",sec:"Guess time (s)",cd:"Cooldown between rounds (s)",chat:"Chat",msg:"Message",send:"Send",theme:"Toggle theme",dctitle:"Join our Discord",other:"Other",
+needw:"⚠ Set the Worker address (WORKER) in index.html.",conn:"Connecting…",badurl:"Invalid Worker address.",to:"No server response within 10 s – try again.",closed:"Disconnected (room full, wrong Worker URL, or access denied). Try again.",joined:"You're in room \"{0}\".",
+rinfo:"Round {0}/{1} – guess the title!",ans:"Answer: {0} ({1})",next:"Next in ",fin:"Game over – the host can start another one.",
+aload:"Loading track…",aplay:"♪ Playing",astuck:"Didn't start – click ▶ Play (the browser may have blocked autoplay).",aerr:"⚠ SoundCloud returned an error (private link or embedding disabled?)",aph:"⚠ A placeholder is left in worker/src/tracks.js – replace the SoundCloud link.",
+guessed:"{0} got it!",final:"Game over! ",notr:"No tracks for the selected games.",lim:"Only {0} tracks available – we'll play that many rounds.",wrong:"✗ Wrong",right:"✓ Correct!"}};
 const $=id=>document.getElementById(id),norm=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,"");
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let ws,myId,hostId,titles=[],cfg=null,phase="lobby",widget,tick,pt,ready=false;
-const log=(n,t)=>{const d=document.createElement("div");d.innerHTML="<b>"+esc(n)+":</b> "+esc(t);$("chat").append(d);$("chat").scrollTop=1e9};
+let lang=(navigator.language||"").toLowerCase().startsWith("pl")?"pl":"en";try{const sl=localStorage.getItem("tmrLang");if(sl)lang=sl}catch(e){}
+const t=(k,...a)=>(I18N[lang][k]||k).replace(/\{(\d)\}/g,(_,i)=>a[i]);
+const dyn={};function setT(id,k,...a){dyn[id]=k?[k,a]:null;$(id).textContent=k?t(k,...a):""}
+let ws,myId,hostId,tracks=[],groups=[],cfg=null,phase="lobby",widget,tick,pt,ready=false,picked=null;
+function applyLang(){document.documentElement.lang=lang;
+ document.querySelectorAll("[data-i]").forEach(e=>e.textContent=t(e.dataset.i));
+ document.querySelectorAll("[data-ph]").forEach(e=>e.placeholder=t(e.dataset.ph));
+ document.querySelectorAll("[data-ti]").forEach(e=>e.title=t(e.dataset.ti));
+ $("lng").textContent=lang==="pl"?"EN":"PL";
+ for(const id in dyn)if(dyn[id])$(id).textContent=t(dyn[id][0],...dyn[id][1]);
+ buildGroups();updUI()}
+$("lng").onclick=()=>{lang=lang==="pl"?"en":"pl";try{localStorage.setItem("tmrLang",lang)}catch(e){}applyLang()};
+function setTheme(x){document.documentElement.dataset.theme=x;$("thm").textContent=x==="dark"?"☀️":"🌙";try{localStorage.setItem("tmrTheme",x)}catch(e){}}
+$("thm").onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+$("dc").href=DISCORD_URL;
+const log=(n,x)=>{const d=document.createElement("div");d.innerHTML="<b>"+esc(n)+":</b> "+esc(x);$("chat").append(d);$("chat").scrollTop=1e9};
 const send=m=>ws&&ws.readyState===1&&ws.send(JSON.stringify(m));
 const isHost=()=>hostId===myId;
-function countdown(sec,pre){const e=Date.now()+sec*1000;clearInterval(tick);const f=()=>{const s=Math.max(0,Math.ceil((e-Date.now())/1000));$("big").textContent=pre+s+" s";if(!s)clearInterval(tick)};f();tick=setInterval(f,250)}
+function countdown(sec,key){const e=Date.now()+sec*1000;clearInterval(tick);const f=()=>{const s=Math.max(0,Math.ceil((e-Date.now())/1000));$("big").textContent=(key?t(key):"")+s+" s";if(!s)clearInterval(tick)};f();tick=setInterval(f,250)}
+function buildGroups(){$("gl").innerHTML=groups.map(g=>'<div class="pg"><label><input type="checkbox" data-p> '+esc(g.platform==="Inne"?t("other"):g.platform)+'</label>'+g.games.map(x=>'<label class="g'+(x.c?'':' off')+'"><input type="checkbox" data-g value="'+esc(x.n)+'"'+(x.c?'':' disabled data-off')+'> '+esc(x.n)+' <span class="m">('+x.c+')</span></label>').join("")+'</div>').join("")}
 function updUI(){const h=isHost(),lob=phase==="lobby";
  $("start").disabled=!(h&&lob);$("skip").disabled=$("stop").disabled=!(h&&!lob);
  document.querySelectorAll("#gl .pg").forEach(pg=>{const gs=[...pg.querySelectorAll("input[data-g]")];
@@ -54,49 +92,68 @@ function updUI(){const h=isHost(),lob=phase==="lobby";
   pc.disabled=!on.length||!(h&&lob);pc.checked=on.length>0&&sel===on.length;pc.indeterminate=sel>0&&sel<on.length});
  [["rn","rounds"],["sec","sec"],["cd","cd"]].forEach(([i,k])=>{const e=$(i);e.disabled=!(h&&lob);if(cfg&&document.activeElement!==e)e.value=cfg[k]})}
 function sendCfg(){send({t:"settings",games:[...document.querySelectorAll("#gl input[data-g]:checked")].map(c=>c.value),rounds:$("rn").value,sec:$("sec").value,cd:$("cd").value})}
+function flash(ok){const g=$("g"),f=$("fb");g.classList.remove("bad","good");f.className="m";void g.offsetWidth;g.classList.add(ok?"good":"bad");f.classList.add(ok?"good":"bad");f.textContent=t(ok?"right":"wrong");
+ clearTimeout(flash.t);flash.t=setTimeout(()=>{g.classList.remove("bad","good");f.className="m";f.textContent=""},900)}
+function sysMsg(m){const a=m.a||[];if(m.k==="final")log("system",t("final")+m.r.map((p,i)=>(i+1)+". "+p.n+" "+p.s).join(" · "));else log("system",t(m.k,...a))}
 function onMsg(m){
  if(m.t==="hello")myId=m.id;
- else if(m.t==="meta"){titles=m.titles;$("gl").innerHTML=m.groups.map(g=>'<div class="pg"><label><input type="checkbox" data-p> '+esc(g.platform)+'</label>'+g.games.map(x=>'<label class="g'+(x.c?'':' off')+'"><input type="checkbox" data-g value="'+esc(x.n)+'"'+(x.c?'':' disabled data-off')+'> '+esc(x.n)+' <span class="m">('+x.c+')</span></label>').join("")+'</div>').join("");updUI()}
+ else if(m.t==="meta"){tracks=m.tracks;groups=m.groups;buildGroups();updUI()}
  else if(m.t==="state"){hostId=m.host;phase=m.phase;cfg=m.cfg;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+(p.id===m.host?"👑 ":"")+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
-  if(!ready){ready=true;["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);$("st").textContent="Jesteś w pokoju „"+$("room").value+"”."}
+  if(!ready){ready=true;["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);setT("st","joined",$("room").value)}
   updUI()}
  else if(m.t==="chat")log(m.n,m.x);
- else if(m.t==="round"){$("info").textContent="Runda "+m.n+"/"+m.total+" – zgadnij tytuł!";playUrl(m.url);countdown(m.sec,"")}
- else if(m.t==="reveal"){$("info").textContent="Odpowiedź: "+m.title+" ("+m.game+")";if(widget)widget.pause();countdown(m.cd,"Następna za ")}
- else if(m.t==="final"){clearInterval(tick);$("big").textContent="—";$("info").textContent="Koniec gry – host może wystartować kolejną.";if(widget)widget.pause()}}
-function playUrl(u){const a=$("aud");clearTimeout(pt);
- if(u.includes("REPLACE")){a.textContent="⚠ W worker/src/tracks.js został placeholder – podmień link SoundCloud.";return}
- a.textContent="Ładowanie utworu…";
- pt=setTimeout(()=>{a.textContent="Nie wystartowało – kliknij ▶ Play (przeglądarka mogła zablokować autoodtwarzanie)."},7000);
+ else if(m.t==="sys")sysMsg(m);
+ else if(m.t==="wrong")flash(false);
+ else if(m.t==="right")flash(true);
+ else if(m.t==="round"){setT("info","rinfo",m.n,m.total);playUrl(m.url);countdown(m.sec,null)}
+ else if(m.t==="reveal"){setT("info","ans",m.title,m.game);if(widget)widget.pause();countdown(m.cd,"next")}
+ else if(m.t==="final"){clearInterval(tick);$("big").textContent="—";setT("info","fin");if(widget)widget.pause()}}
+function playUrl(u){clearTimeout(pt);
+ if(u.includes("REPLACE")){setT("aud","aph");return}
+ setT("aud","aload");
+ pt=setTimeout(()=>setT("aud","astuck"),7000);
  if(widget){widget.load(u,{auto_play:true,visual:false});return}
  $("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
  widget=SC.Widget($("sc"));const E=SC.Widget.Events;
  widget.bind(E.READY,()=>{applyVol();widget.play()});
- widget.bind(E.PLAY,()=>{applyVol();clearTimeout(pt);a.textContent="♪ Gra"});
- widget.bind(E.ERROR,()=>{clearTimeout(pt);a.textContent="⚠ SoundCloud zwrócił błąd (link prywatny lub osadzanie wyłączone?)"})}
+ widget.bind(E.PLAY,()=>{applyVol();clearTimeout(pt);setT("aud","aplay")});
+ widget.bind(E.ERROR,()=>{clearTimeout(pt);setT("aud","aerr")})}
 $("jb").onclick=()=>{
  const name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0),code=norm($("room").value)||"main";
- if(WORKER.includes("TWOJA-SUBDOMENA")){$("st").textContent="⚠ Ustaw adres Workera (WORKER) w index.html.";return}
- $("jb").disabled=true;$("st").textContent="Łączenie…";ready=false;
- try{ws=new WebSocket(WORKER+"/room/"+code)}catch(e){$("jb").disabled=false;$("st").textContent="Nieprawidłowy adres Workera.";return}
- const to=setTimeout(()=>{if(!ready){ws.close();$("jb").disabled=false;$("st").textContent="Brak odpowiedzi serwera w 10 s – spróbuj ponownie."}},10000);
+ if(WORKER.includes("TWOJA-SUBDOMENA")){setT("st","needw");return}
+ $("jb").disabled=true;setT("st","conn");ready=false;
+ try{ws=new WebSocket(WORKER+"/room/"+code)}catch(e){$("jb").disabled=false;setT("st","badurl");return}
+ const to=setTimeout(()=>{if(!ready){ws.close();$("jb").disabled=false;setT("st","to")}},10000);
  ws.onopen=()=>send({t:"join",name});
- ws.onmessage=e=>{try{onMsg(JSON.parse(e.data))}catch{}};
- ws.onclose=()=>{clearTimeout(to);ready=false;["g","gb","ci","cb","start","skip","stop","play"].forEach(i=>$(i).disabled=true);$("jb").disabled=false;$("st").textContent="Rozłączono (pokój pełny, zły adres Workera lub brak dostępu). Spróbuj ponownie."}};
+ ws.onmessage=e=>{try{onMsg(JSON.parse(e.data))}catch(x){}};
+ ws.onclose=()=>{clearTimeout(to);ready=false;["g","gb","ci","cb","start","skip","stop","play"].forEach(i=>$(i).disabled=true);$("jb").disabled=false;setT("st","closed")}};
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
-$("gb").onclick=()=>{$("sug").style.display="none";const v=$("g").value;$("g").value="";send({t:"guess",x:v})};
+$("gb").onclick=()=>{hideSug();const v=$("g").value;if(!v.trim())return;$("g").value="";send({t:"guess",x:v,gm:picked||undefined});picked=null};
 $("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};
-$("start").onclick=()=>send({t:"start"});$("stop").onclick=()=>send({t:"stop"});$("gl").onchange=e=>{if(e.target.hasAttribute("data-p"))e.target.closest(".pg").querySelectorAll("input[data-g]:not([data-off])").forEach(c=>c.checked=e.target.checked);sendCfg()};["rn","sec","cd"].forEach(i=>$(i).onchange=sendCfg);$("skip").onclick=()=>send({t:"skip"});$("play").onclick=()=>widget&&widget.play();
+$("start").onclick=()=>send({t:"start"});$("skip").onclick=()=>send({t:"skip"});$("stop").onclick=()=>send({t:"stop"});$("play").onclick=()=>widget&&widget.play();
+$("gl").onchange=e=>{if(e.target.hasAttribute("data-p"))e.target.closest(".pg").querySelectorAll("input[data-g]:not([data-off])").forEach(c=>c.checked=e.target.checked);sendCfg()};
+["rn","sec","cd"].forEach(i=>$(i).onchange=sendCfg);
+// ---- podpowiedzi: tylko utwory z włączonych gier; strzałki, Tab, Enter, Esc ----
 const sg=$("sug");let sa=[],si=-1;
-function sugg(){const q=norm($("g").value);sa=q.length<2?[]:titles.filter(t=>norm(t).includes(q)).slice(0,6);si=-1;
- sg.innerHTML=sa.map((t,i)=>'<div data-i="'+i+'">'+esc(t)+'</div>').join("");sg.style.display=sa.length?"block":"none"}
-$("g").oninput=sugg;
-sg.onmousedown=e=>{const i=e.target.dataset.i;if(i!=null){e.preventDefault();$("g").value=sa[i];$("gb").click()}};
+const shown=()=>sg.style.display==="block"&&sa.length>0;
+function hideSug(){sg.style.display="none";si=-1}
+function hl(){[...sg.children].forEach((c,i)=>c.className=i===si?"a":"");const c=sg.children[si];if(c)c.scrollIntoView({block:"nearest"})}
+function sugg(){const q=norm($("g").value);
+ const pool=tracks.filter(x=>!cfg||cfg.games.includes(x.g));
+ sa=q.length<2?[]:pool.filter(x=>norm(x.t).includes(q)).sort((a,b)=>(norm(b.t).startsWith(q)-norm(a.t).startsWith(q))).slice(0,10);si=-1;
+ sg.innerHTML=sa.map((x,i)=>'<div data-i="'+i+'">'+esc(x.t)+' <span class="m">· '+esc(x.g)+'</span></div>').join("");sg.style.display=sa.length?"block":"none"}
+function pick(i){$("g").value=sa[i].t;picked=sa[i].g;hideSug()}
+$("g").oninput=()=>{picked=null;sugg()};
+sg.onmousedown=e=>{const d=e.target.closest("[data-i]");if(d){e.preventDefault();pick(+d.dataset.i);$("gb").click()}};
 $("g").addEventListener("keydown",e=>{
- if(e.key==="Enter"){if(si>=0)$("g").value=sa[si];$("gb").click()}
- else if(sa.length&&(e.key==="ArrowDown"||e.key==="ArrowUp")){e.preventDefault();si=(si+(e.key==="ArrowDown"?1:-1)+sa.length)%sa.length;[...sg.children].forEach((c,i)=>c.className=i===si?"a":"")}});
-$("g").onblur=()=>setTimeout(()=>sg.style.display="none",150);
+ if(e.key==="Enter"){e.preventDefault();if(shown()&&si>=0)pick(si);$("gb").click()}
+ else if(e.key==="Tab"&&shown()){e.preventDefault();pick(si>=0?si:0)}
+ else if(e.key==="Escape")hideSug();
+ else if(shown()&&(e.key==="ArrowDown"||e.key==="ArrowUp")){e.preventDefault();si=(si+(e.key==="ArrowDown"?1:-1)+sa.length)%sa.length;hl()}});
+$("g").onblur=()=>setTimeout(hideSug,150);
+// ---- głośność ----
 function applyVol(){if(widget)widget.setVolume(+$("vol").value)}
-try{const sv=localStorage.getItem("tmrVol");if(sv!==null)$("vol").value=+sv}catch{}
-$("vol").oninput=()=>{applyVol();try{localStorage.setItem("tmrVol",$("vol").value)}catch{}};
+try{const sv=localStorage.getItem("tmrVol");if(sv!==null)$("vol").value=+sv}catch(e){}
+$("vol").oninput=()=>{applyVol();try{localStorage.setItem("tmrVol",$("vol").value)}catch(e){}};
+setT("st","intro");setTheme(document.documentElement.dataset.theme);applyLang();
 </script></body></html>
