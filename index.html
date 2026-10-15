@@ -33,7 +33,7 @@ input[type=number]{width:80px;flex:none!important;margin-left:6px}
 <header><h1>Touhou Music Room <span class="m" data-i="sub"></span></h1>
 <div class="bar"><button id="thm" class="ghost" data-ti="theme"></button><button id="lng" class="ghost"></button><a id="dc" class="btn" target="_blank" rel="noopener" data-ti="dctitle">Discord</a></div></header>
 <div class="c"><h2 data-i="room"></h2>
-<div class="row"><input id="nick" maxlength="16" data-ph="nick"><input id="room" maxlength="24" value="" data-ph="code"></div>
+<div class="row"><input id="nick" maxlength="16" data-ph="nick"><input id="room" maxlength="24" minlength="3" value="" data-ph="code"></div>
 <div class="row"><button id="jb" data-i="join"></button></div>
 <p class="m" id="st"></p>
 <h2 data-i="players"></h2><ul id="pl"></ul></div>
@@ -53,12 +53,12 @@ const WORKER="wss://touhou-music-room.touhoumusicroom.workers.dev";   // Worker 
 const DISCORD_URL="https://discord.gg/REPLACE";                         // Discord Link
 const I18N={
 pl:{sub:"– fan remake",room:"Pokój",nick:"Nick",code:"Kod pokoju",join:"Dołącz / utwórz",intro:"Pierwsza osoba w pokoju jest hostem (może startować rundy). Gdy host wyjdzie, rolę przejmuje następna osoba.",players:"Gracze",round:"Runda",start:"Start gry",skip:"Skip",stop:"Stop",play:"▶ Play",guessph:"Jaki to utwór?",guess:"Zgaduj",vol:"Głośność",settings:"Ustawienia gry",sethint:"(zmienia host, w lobby)",allowed:"Dozwolone gry:",rounds:"Liczba rund",sec:"Czas na zgadywanie (s)",cd:"Przerwa między rundami (s)",chat:"Czat",msg:"Wiadomość",send:"Wyślij",theme:"Zmień motyw",dctitle:"Dołącz do naszego Discorda",other:"Inne",
-needw:"⚠ Ustaw adres Workera (WORKER) w index.html.",conn:"Łączenie…",badurl:"Nieprawidłowy adres Workera.",to:"Brak odpowiedzi serwera w 10 s – spróbuj ponownie.",closed:"Rozłączono (pokój pełny, zły adres Workera lub brak dostępu). Spróbuj ponownie.",joined:"Jesteś w pokoju „{0}”.",
+needw:"⚠ Ustaw adres Workera (WORKER) w index.html.",conn:"Łączenie…",badurl:"Nieprawidłowy adres Workera.",to:"Brak odpowiedzi serwera w 10 s – spróbuj ponownie.",short:"Nazwa pokoju musi mieć min. 3 znaki (litery lub cyfry).",closed:"Rozłączono (pokój pełny, zły adres Workera lub brak dostępu). Spróbuj ponownie.",joined:"Jesteś w pokoju „{0}”.",
 rinfo:"Runda {0}/{1} – zgadnij tytuł!",ans:"Odpowiedź: {0} ({1})",next:"Następna za ",fin:"Koniec gry – host może wystartować kolejną.",
 aload:"Ładowanie utworu…",aplay:"♪ Gra",astuck:"Nie wystartowało – kliknij ▶ Play (przeglądarka mogła zablokować autoodtwarzanie).",aerr:"⚠ SoundCloud zwrócił błąd (link prywatny lub osadzanie wyłączone?)",aph:"⚠ W worker/src/tracks.js został placeholder – podmień link SoundCloud.",
 guessed:"{0} zgadł(a)!",final:"Koniec gry! ",notr:"Brak utworów dla wybranych gier.",lim:"Dostępnych utworów: {0} – tyle rund zagramy.",wrong:"✗ Źle",right:"✓ Dobrze!"},
 en:{sub:"– fan remake",room:"Room",nick:"Nickname",code:"Room code",join:"Join / create",intro:"The first person in the room is the host (can start rounds). If the host leaves, the next person takes over.",players:"Players",round:"Round",start:"Start game",skip:"Skip",stop:"Stop",play:"▶ Play",guessph:"What is the song?",guess:"Guess",vol:"Volume",settings:"Game settings",sethint:"(host only, in lobby)",allowed:"Allowed games:",rounds:"Rounds",sec:"Guess time (s)",cd:"Cooldown between rounds (s)",chat:"Chat",msg:"Message",send:"Send",theme:"Toggle theme",dctitle:"Join our Discord",other:"Other",
-needw:"⚠ Set the Worker address (WORKER) in index.html.",conn:"Connecting…",badurl:"Invalid Worker address.",to:"No server response within 10 s – try again.",closed:"Disconnected (room full, wrong Worker URL, or access denied). Try again.",joined:"You're in room \"{0}\".",
+needw:"⚠ Set the Worker address (WORKER) in index.html.",conn:"Connecting…",badurl:"Invalid Worker address.",to:"No server response within 10 s – try again.",short:"Room name must be at least 3 characters (letters or digits).",closed:"Disconnected (room full, wrong Worker URL, or access denied). Try again.",joined:"You're in room \"{0}\".",
 rinfo:"Round {0}/{1} – guess the title!",ans:"Answer: {0} ({1})",next:"Next in ",fin:"Game over – the host can start another one.",
 aload:"Loading track…",aplay:"♪ Playing",astuck:"Didn't start – click ▶ Play (the browser may have blocked autoplay).",aerr:"⚠ SoundCloud returned an error (private link or embedding disabled?)",aph:"⚠ A placeholder is left in worker/src/tracks.js – replace the SoundCloud link.",
 guessed:"{0} got it!",final:"Game over! ",notr:"No tracks for the selected games.",lim:"Only {0} tracks available – we'll play that many rounds.",wrong:"✗ Wrong",right:"✓ Correct!"}};
@@ -67,7 +67,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 let lang=(navigator.language||"").toLowerCase().startsWith("pl")?"pl":"en";try{const sl=localStorage.getItem("tmrLang");if(sl)lang=sl}catch(e){}
 const t=(k,...a)=>(I18N[lang][k]||k).replace(/\{(\d)\}/g,(_,i)=>a[i]);
 const dyn={};function setT(id,k,...a){dyn[id]=k?[k,a]:null;$(id).textContent=k?t(k,...a):""}
-let ws,myId,hostId,tracks=[],groups=[],cfg=null,phase="lobby",widget,tick,pt,ready=false,picked=null;
+let ws,myId,hostId,tracks=[],groups=[],cfg=null,phase="lobby",widget,tick,pt,ready=false,picked=null,roundOn=false,playing=false;
 function applyLang(){document.documentElement.lang=lang;
  document.querySelectorAll("[data-i]").forEach(e=>e.textContent=t(e.dataset.i));
  document.querySelectorAll("[data-ph]").forEach(e=>e.placeholder=t(e.dataset.ph));
@@ -84,6 +84,7 @@ const send=m=>ws&&ws.readyState===1&&ws.send(JSON.stringify(m));
 const isHost=()=>hostId===myId;
 function countdown(sec,key){const e=Date.now()+sec*1000;clearInterval(tick);const f=()=>{const s=Math.max(0,Math.ceil((e-Date.now())/1000));$("big").textContent=(key?t(key):"")+s+" s";if(!s)clearInterval(tick)};f();tick=setInterval(f,250)}
 function buildGroups(){$("gl").innerHTML=groups.map(g=>'<div class="pg"><label><input type="checkbox" data-p> '+esc(g.platform==="Inne"?t("other"):g.platform)+'</label>'+g.games.map(x=>'<label class="g'+(x.c?'':' off')+'"><input type="checkbox" data-g value="'+esc(x.n)+'"'+(x.c?'':' disabled data-off')+'> '+esc(x.n)+' <span class="m">('+x.c+')</span></label>').join("")+'</div>').join("")}
+function updPlay(){$("play").disabled=!(ready&&roundOn&&!playing)}
 function updUI(){const h=isHost(),lob=phase==="lobby";
  $("start").disabled=!(h&&lob);$("skip").disabled=$("stop").disabled=!(h&&!lob);
  document.querySelectorAll("#gl .pg").forEach(pg=>{const gs=[...pg.querySelectorAll("input[data-g]")];
@@ -99,15 +100,15 @@ function onMsg(m){
  if(m.t==="hello")myId=m.id;
  else if(m.t==="meta"){tracks=m.tracks;groups=m.groups;buildGroups();updUI()}
  else if(m.t==="state"){hostId=m.host;phase=m.phase;cfg=m.cfg;$("pl").innerHTML=[...m.p].sort((a,b)=>b.s-a.s).map(p=>"<li><span>"+(p.id===m.host?"👑 ":"")+esc(p.n)+"</span><b>"+p.s+"</b></li>").join("");
-  if(!ready){ready=true;["g","gb","ci","cb","play"].forEach(i=>$(i).disabled=false);setT("st","joined",$("room").value)}
-  updUI()}
+  if(!ready){ready=true;["g","gb","ci","cb"].forEach(i=>$(i).disabled=false);setT("st","joined",$("room").value)}
+  updUI();updPlay()}
  else if(m.t==="chat")log(m.n,m.x);
  else if(m.t==="sys")sysMsg(m);
  else if(m.t==="wrong")flash(false);
  else if(m.t==="right")flash(true);
- else if(m.t==="round"){setT("info","rinfo",m.n,m.total);playUrl(m.url);countdown(m.sec,null)}
- else if(m.t==="reveal"){setT("info","ans",m.title,m.game);if(widget)widget.pause();countdown(m.cd,"next")}
- else if(m.t==="final"){clearInterval(tick);$("big").textContent="—";setT("info","fin");if(widget)widget.pause()}}
+ else if(m.t==="round"){roundOn=true;playing=false;updPlay();setT("info","rinfo",m.n,m.total);playUrl(m.url);countdown(m.sec,null)}
+ else if(m.t==="reveal"){roundOn=false;playing=false;updPlay();setT("info","ans",m.title,m.game);if(widget)widget.pause();countdown(m.cd,"next")}
+ else if(m.t==="final"){roundOn=false;playing=false;updPlay();clearInterval(tick);$("big").textContent="—";setT("info","fin");if(widget)widget.pause()}}
 function playUrl(u){clearTimeout(pt);
  if(u.includes("REPLACE")){setT("aud","aph");return}
  setT("aud","aload");
@@ -116,17 +117,19 @@ function playUrl(u){clearTimeout(pt);
  $("sc").src="https://w.soundcloud.com/player/?url="+encodeURIComponent(u)+"&auto_play=true&visual=false";
  widget=SC.Widget($("sc"));const E=SC.Widget.Events;
  widget.bind(E.READY,()=>{applyVol();widget.play()});
- widget.bind(E.PLAY,()=>{applyVol();clearTimeout(pt);setT("aud","aplay")});
- widget.bind(E.ERROR,()=>{clearTimeout(pt);setT("aud","aerr")})}
+ widget.bind(E.PLAY,()=>{playing=true;updPlay();applyVol();clearTimeout(pt);setT("aud","aplay")});
+ widget.bind(E.PAUSE,()=>{playing=false;updPlay()});widget.bind(E.FINISH,()=>{playing=false;updPlay()});
+ widget.bind(E.ERROR,()=>{playing=false;updPlay();clearTimeout(pt);setT("aud","aerr")})}
 $("jb").onclick=()=>{
- const name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0),code=norm($("room").value)||"main";
+ const name=$("nick").value.trim()||"Gracz"+(Math.random()*99|0),code=norm($("room").value);
+ if(code.length<3){setT("st","short");return}
  if(WORKER.includes("TWOJA-SUBDOMENA")){setT("st","needw");return}
  $("jb").disabled=true;setT("st","conn");ready=false;
  try{ws=new WebSocket(WORKER+"/room/"+code)}catch(e){$("jb").disabled=false;setT("st","badurl");return}
  const to=setTimeout(()=>{if(!ready){ws.close();$("jb").disabled=false;setT("st","to")}},10000);
  ws.onopen=()=>send({t:"join",name});
  ws.onmessage=e=>{try{onMsg(JSON.parse(e.data))}catch(x){}};
- ws.onclose=()=>{clearTimeout(to);ready=false;["g","gb","ci","cb","start","skip","stop","play"].forEach(i=>$(i).disabled=true);$("jb").disabled=false;setT("st","closed")}};
+ ws.onclose=()=>{clearTimeout(to);ready=false;roundOn=false;playing=false;["g","gb","ci","cb","start","skip","stop","play"].forEach(i=>$(i).disabled=true);$("jb").disabled=false;setT("st","closed")}};
 $("cb").onclick=()=>{const v=$("ci").value.trim();if(v){send({t:"chat",x:v});$("ci").value=""}};
 $("gb").onclick=()=>{hideSug();const v=$("g").value;if(!v.trim())return;$("g").value="";send({t:"guess",x:v,gm:picked||undefined});picked=null};
 $("ci").onkeydown=e=>{if(e.key==="Enter")$("cb").click()};
